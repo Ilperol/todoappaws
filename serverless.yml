@@ -1,0 +1,91 @@
+org: ilperol
+app: todo
+service: todo-app
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  environment:
+    TODOS_TABLE: ${self:service}-table-${sls:stage}
+  httpApi:
+    cors:
+      allowedOrigins:
+        - '*'
+      allowedHeaders:
+        - '*'
+      allowedMethods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+      allowCredentials: false
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:GetItem
+        - dynamodb:Scan
+        - dynamodb:Query
+      Resource:
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}/index/GSI1
+
+functions:
+  createTodo:
+    handler: handler.createTodo
+    events:
+      - httpApi:
+          path: /todos
+          method: post
+  getTodos:
+    handler: handler.getTodos
+    events:
+      - httpApi:
+          path: /todos
+          method: get
+  updateTodo:
+    handler: handler.updateTodo
+    events:
+      - httpApi:
+          path: /todos/{id}
+          method: put
+  deleteTodo:
+    handler: handler.deleteTodo
+    events:
+      - httpApi:
+          path: /todos/{id}
+          method: delete
+
+resources:
+  Resources:
+    TodosTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.TODOS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+          - AttributeName: gsi1_pk
+            AttributeType: S
+          - AttributeName: gsi1_sk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: gsi1_pk
+                KeyType: HASH
+              - AttributeName: gsi1_sk
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
